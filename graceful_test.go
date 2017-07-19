@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"log"
 )
 
 const (
@@ -124,7 +125,7 @@ func TestGracefulRun(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		g := New()
-		srv := g.Server(server).Timeout(killTime).Build()
+		srv := g.Server(server).Timeout(killTime).LogFunc(log.Printf).Build()
 		srv.Serve(l)
 	}()
 

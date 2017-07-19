@@ -19,6 +19,7 @@ type ShutdownInitiatedFunc func()
 type GracefulBuilder interface {
 	Server(server *http.Server) GracefulBuilder
 	Timeout(timeout time.Duration) GracefulBuilder
+    LogFunc(logFunc LogFunc) GracefulBuilder
 	ConnState(connStateFunc ConnStateFunc) GracefulBuilder
 	BeforeShutdown(beforeShutdownFunc BeforeShutdownFunc) GracefulBuilder
 	ShutdownInitiated(shutdownInitiatedFunc ShutdownInitiatedFunc) GracefulBuilder
@@ -41,6 +42,21 @@ type Graceful struct {
 	Interrupt chan os.Signal
 }
 
+// Run serves the http.Handler with graceful shutdown enabled.
+//
+// timeout is the duration to wait until killing active requests and stopping the server.
+// If timeout is 0, the server never times out. It waits for all active requests to finish.
+func Run(addr string, timeout time.Duration, n http.Handler, logFunc LogFunc) {
+    g := New().Server(&http.Server{Addr: addr, Handler: n}).Timeout(timeout).LogFunc(logFunc).Build()
+
+	if err := g.ListenAndServe(); err != nil {
+		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
+            logFunc("%s", err)
+			os.Exit(1)
+		}
+	}
+}
+
 func New() GracefulBuilder {
 	return &gracefulBuilder{}
 }
@@ -53,6 +69,11 @@ func (g *gracefulBuilder) Server(server *http.Server) GracefulBuilder {
 func (g *gracefulBuilder) Timeout(timeout time.Duration) GracefulBuilder {
 	g.timeout = timeout
 	return g
+}
+
+func (g *gracefulBuilder) LogFunc(logFunc LogFunc) GracefulBuilder {
+    g.logFunc = logFunc
+    return g
 }
 
 func (g *gracefulBuilder) ConnState(connStateFunc ConnStateFunc) GracefulBuilder {
